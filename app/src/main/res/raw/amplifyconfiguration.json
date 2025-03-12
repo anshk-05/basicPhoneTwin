@@ -1,0 +1,29 @@
+{
+  "auth": {
+    "plugins": {
+      "awsCognitoAuthPlugin": {
+        "IdentityManager": {
+          "Default": {}
+        },
+        "CredentialsProvider": {
+          "CognitoIdentity": {
+            "Default": {
+              "PoolId": "YOUR_IDENTITY_POOL_ID",
+              "Region": "YOUR_REGION"
+            }
+          }
+        }
+      }
+    }
+  },
+  "iot": {
+    "plugins": {
+      "awsIotMqttPlugin": {
+        "connection": {
+          "region": "YOUR_REGION",
+          "endpoint": "YOUR_IOT_ENDPOINT.iot.YOUR_REGION.amazonaws.com"
+        }
+      }
+    }
+  }
+}

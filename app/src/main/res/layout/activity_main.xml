@@ -7,6 +7,23 @@
     android:padding="20dp">
 
     <TextView
+        android:id="@+id/titleText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Device Metrics Monitor"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Status: Ready"
+        android:textColor="#0277BD"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
         android:id="@+id/cpuUsageText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -29,5 +46,21 @@
         android:text="Storage: -- MB"
         android:textSize="22sp"
         android:padding="10dp" />
+
+    <TextView
+        android:id="@+id/batteryText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Battery: --% | Temp: --°C"
+        android:textSize="22sp"
+        android:padding="10dp" />
+
+    <Button
+        android:id="@+id/startStopButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Start Monitoring"
+        android:padding="12dp"
+        android:layout_marginTop="24dp" />
 
 </LinearLayout>

@@ -35,4 +35,11 @@ dependencies {
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
+
+    // Replace your current AWS dependencies with these
+    implementation 'com.amazonaws:aws-android-sdk-core:2.72.0'
+    implementation 'com.amazonaws:aws-android-sdk-iot:2.72.0'
+    implementation 'com.amazonaws:aws-android-sdk-iotdata:2.72.0'
+    implementation 'com.amazonaws:aws-android-sdk-cognito:2.72.0'
+    implementation 'com.amazonaws:aws-android-sdk-cognitoidentityprovider:2.72.0'
 }
