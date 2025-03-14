@@ -17,13 +17,14 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+/*
 import com.amplifyframework.AmplifyException;
 import com.amplifyframework.auth.cognito.AWSCognitoAuthPlugin;
 import com.amplifyframework.core.Amplify;
 import com.amplifyframework.core.AmplifyConfiguration;
 import com.amplifyframework.iot.aws.AwsIotMqttManager;
 import com.amplifyframework.iot.aws.MqttQualityOfService;
-
+ */
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -49,7 +50,7 @@ public class MainActivity extends AppCompatActivity {
     private long previousRxBytes = 0;
     private long previousTxBytes = 0;
     private boolean isCollecting = false;
-    private AwsIotMqttManager mqttManager;
+  //  private AwsIotMqttManager mqttManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,7 +67,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Initialize AWS services
         try {
-            initializeAWS();
+            //initializeAWS();
         } catch (Exception e) {
             logToFile("Failed to initialize AWS: " + e.getMessage());
             Log.e(TAG, "Failed to initialize AWS", e);
@@ -86,6 +87,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    /*
     private void initializeAWS() {
         try {
             // Try to configure Amplify from a configuration file
@@ -117,7 +119,7 @@ public class MainActivity extends AppCompatActivity {
             statusText.setText("AWS Error: " + e.getMessage());
         }
     }
-
+     */
     private void startDataCollection() {
         isCollecting = true;
         startStopButton.setText("Stop Monitoring");
@@ -161,7 +163,7 @@ public class MainActivity extends AppCompatActivity {
                 String.format("%.1f", batteryTemp) + "°C");
 
         // Send data to AWS TwinMaker
-        sendDataToAWS(cpuUsage, previousRxBytes, previousTxBytes, batteryTemp, batteryLevel);
+       // sendDataToAWS(cpuUsage, previousRxBytes, previousTxBytes, batteryTemp, batteryLevel);
     }
 
     private float getCPUUsage() {
@@ -222,6 +224,7 @@ public class MainActivity extends AppCompatActivity {
         return 0.0f;
     }
 
+    /*
     private void sendDataToAWS(float cpuUsage, long rxBytes, long txBytes,
                                float batteryTemp, float batteryLevel) {
         try {
@@ -288,6 +291,8 @@ public class MainActivity extends AppCompatActivity {
             });
         }
     }
+    */
+
 
     private void saveDataLocally(String data) {
         try {
