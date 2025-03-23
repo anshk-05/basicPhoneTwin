@@ -17,29 +17,41 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/*
-import com.amplifyframework.AmplifyException;
-import com.amplifyframework.auth.cognito.AWSCognitoAuthPlugin;
-import com.amplifyframework.core.Amplify;
-import com.amplifyframework.core.AmplifyConfiguration;
-import com.amplifyframework.iot.aws.AwsIotMqttManager;
-import com.amplifyframework.iot.aws.MqttQualityOfService;
- */
+import com.amazonaws.auth.CognitoCachingCredentialsProvider;
+import com.amazonaws.mobileconnectors.iot.AWSIotKeystoreHelper;
+import com.amazonaws.mobileconnectors.iot.AWSIotMqttClientStatusCallback;
+import com.amazonaws.mobileconnectors.iot.AWSIotMqttManager;
+import com.amazonaws.mobileconnectors.iot.AWSIotMqttQos;
+import com.amazonaws.regions.Region;
+import com.amazonaws.regions.Regions;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.security.KeyStore;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "BatteryTempMonitor";
-    private static final String IOT_ENDPOINT = "YOUR_IOT_ENDPOINT.iot.YOUR_REGION.amazonaws.com";
+
+    // UPDATE THESE VALUES with your own AWS IoT information
+    private static final String CUSTOMER_SPECIFIC_ENDPOINT = "adrff8x4zwsxy-ats.iot.eu-west-1.amazonaws.com";
     private static final String IOT_TOPIC = "device/metrics/data";
+    private static final Regions MY_REGION = Regions.EU_WEST_1;
+
+    // Certificate information
+    private static final String KEYSTORE_NAME = "iot_keystore";
+    private static final String KEYSTORE_PASSWORD = "password";
+    private static final String CERTIFICATE_ID = "default";
 
     private Handler handler = new Handler();
     private Runnable updateMetricsTask;
@@ -50,7 +62,11 @@ public class MainActivity extends AppCompatActivity {
     private long previousRxBytes = 0;
     private long previousTxBytes = 0;
     private boolean isCollecting = false;
-  //  private AwsIotMqttManager mqttManager;
+
+    private AWSIotMqttManager mqttManager;
+    private String clientId;
+    private KeyStore clientKeyStore;
+    private boolean isIotConnected = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,14 +81,11 @@ public class MainActivity extends AppCompatActivity {
         statusText = findViewById(R.id.statusText);
         startStopButton = findViewById(R.id.startStopButton);
 
-        // Initialize AWS services
-        try {
-            //initializeAWS();
-        } catch (Exception e) {
-            logToFile("Failed to initialize AWS: " + e.getMessage());
-            Log.e(TAG, "Failed to initialize AWS", e);
-            statusText.setText("AWS Init Failed: " + e.getMessage());
-        }
+        // Generate a unique client ID
+        clientId = UUID.randomUUID().toString();
+
+        // Initialize AWS IoT
+        initializeAwsIot();
 
         // Set up button click listener
         startStopButton.setOnClickListener(new View.OnClickListener() {
@@ -87,39 +100,73 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /*
-    private void initializeAWS() {
+    private void initializeAwsIot() {
+        statusText.setText("Initializing AWS IoT...");
+
         try {
-            // Try to configure Amplify from a configuration file
-            try {
-                AmplifyConfiguration config = AmplifyConfiguration.builder(getApplicationContext())
-                        .devMenuEnabled(false)
-                        .build();
+            // Initialize the AWSIotMqttManager with the client endpoint and client ID
+            mqttManager = new AWSIotMqttManager(clientId, CUSTOMER_SPECIFIC_ENDPOINT);
 
-                Amplify.addPlugin(new AWSCognitoAuthPlugin());
-                Amplify.configure(config, getApplicationContext());
+            // Set keep alive to 30 seconds
+            mqttManager.setKeepAlive(30);
 
-                logToFile("Amplify configured from file");
-            } catch (AmplifyException e) {
-                // If configuration file approach fails, try direct configuration
-                logToFile("Config file approach failed, trying direct config: " + e.getMessage());
+            // Load certificates and initialize the client keystore
+            loadCertificates();
 
-                // Set up IoT MQTT Manager directly
-                mqttManager = AwsIotMqttManager.builder()
-                        .endpoint(IOT_ENDPOINT)
-                        .region("YOUR_REGION") // e.g., "us-east-1"
-                        .build();
-            }
+            // Connect to AWS IoT
+            connectToIot();
 
-            statusText.setText("AWS Connected");
-            logToFile("AWS services initialized");
         } catch (Exception e) {
-            logToFile("Error initializing AWS services: " + e.getMessage());
-            Log.e(TAG, "Error initializing AWS services", e);
-            statusText.setText("AWS Error: " + e.getMessage());
+            Log.e(TAG, "Error initializing AWS IoT", e);
+            statusText.setText("AWS IoT Init Error: " + e.getMessage());
+            logToFile("AWS IoT Init Error: " + e.getMessage());
         }
     }
-     */
+
+    private void connectToIot() {
+        // Connect using certificates
+        try {
+            mqttManager.connect(clientKeyStore, new AWSIotMqttClientStatusCallback() {
+                @Override
+                public void onStatusChanged(AWSIotMqttClientStatus status, Throwable throwable) {
+                    Log.d(TAG, "IoT connection status: " + status);
+                    logToFile("IoT connection status: " + status);
+
+                    runOnUiThread(() -> {
+                        switch (status) {
+                            case Connected:
+                                statusText.setText("Connected to AWS IoT");
+                                isIotConnected = true;
+                                break;
+                            case Connecting:
+                                statusText.setText("Connecting to AWS IoT...");
+                                break;
+                            case Reconnecting:
+                                statusText.setText("Reconnecting to AWS IoT...");
+                                isIotConnected = false;
+                                break;
+                            case ConnectionLost:
+                                statusText.setText("AWS IoT Connection Lost");
+                                isIotConnected = false;
+                                break;
+                            default:
+                                if (throwable != null) {
+                                    statusText.setText("AWS IoT Error: " + throwable.getMessage());
+                                    logToFile("AWS IoT Error: " + throwable.getMessage());
+                                }
+                                isIotConnected = false;
+                                break;
+                        }
+                    });
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Connection error", e);
+            statusText.setText("IoT Connection Error: " + e.getMessage());
+            logToFile("IoT Connection Error: " + e.getMessage());
+        }
+    }
+
     private void startDataCollection() {
         isCollecting = true;
         startStopButton.setText("Stop Monitoring");
@@ -162,8 +209,8 @@ public class MainActivity extends AppCompatActivity {
         batteryText.setText("Battery: " + String.format("%.1f", batteryLevel) + "% | Temp: " +
                 String.format("%.1f", batteryTemp) + "°C");
 
-        // Send data to AWS TwinMaker
-       // sendDataToAWS(cpuUsage, previousRxBytes, previousTxBytes, batteryTemp, batteryLevel);
+        // Send data to AWS IoT
+        sendDataToAWS(cpuUsage, previousRxBytes, previousTxBytes, batteryTemp, batteryLevel);
     }
 
     private float getCPUUsage() {
@@ -217,14 +264,13 @@ public class MainActivity extends AppCompatActivity {
             int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
 
             if (level != -1 && scale != -1) {
-                return level * 100 / (float)scale;
+                return level * 100 / (float) scale;
             }
         }
 
         return 0.0f;
     }
 
-    /*
     private void sendDataToAWS(float cpuUsage, long rxBytes, long txBytes,
                                float batteryTemp, float batteryLevel) {
         try {
@@ -256,26 +302,22 @@ public class MainActivity extends AppCompatActivity {
             logToFile("Preparing to send data: " + payloadStr);
 
             // Send via MQTT if connected
-            if (mqttManager != null) {
-                try {
-                    mqttManager.publishString(payloadStr, IOT_TOPIC, MqttQualityOfService.AT_LEAST_ONCE);
-                    Log.i(TAG, "Data sent to AWS via MQTT");
-                    logToFile("Data sent to AWS via MQTT");
+            if (isIotConnected && mqttManager != null) {
+                mqttManager.publishString(payloadStr, IOT_TOPIC, AWSIotMqttQos.QOS0);
+                Log.i(TAG, "Data sent to AWS IoT");
+                logToFile("Data sent to AWS IoT");
 
-                    runOnUiThread(() -> {
-                        statusText.setText("Data sent at: " + sdf.format(new Date()));
-                    });
-                } catch (Exception e) {
-                    Log.e(TAG, "Failed to publish via MQTT", e);
-                    logToFile("Failed to publish via MQTT: " + e.getMessage());
-
-                    // Fall back to local storage if MQTT fails
-                    saveDataLocally(payloadStr);
-                }
+                runOnUiThread(() -> {
+                    statusText.setText("Data sent at: " + sdf.format(new Date()));
+                });
             } else {
-                // No MQTT manager, save locally
+                // No MQTT connection, save locally
                 saveDataLocally(payloadStr);
-                logToFile("No MQTT manager available, saved locally");
+                logToFile("No IoT connection, saved locally");
+
+                runOnUiThread(() -> {
+                    statusText.setText("No IoT connection, saved locally");
+                });
             }
         } catch (JSONException e) {
             Log.e(TAG, "Error creating JSON payload", e);
@@ -289,10 +331,26 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 statusText.setText("Error sending data: " + e.getMessage());
             });
+
+            // Save locally if there's an error
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("deviceId", android.os.Build.MODEL);
+                payload.put("timestamp", System.currentTimeMillis());
+                payload.put("error", e.getMessage());
+
+                JSONObject metrics = new JSONObject();
+                metrics.put("cpuUsage", cpuUsage);
+                metrics.put("batteryTemp", batteryTemp);
+                metrics.put("batteryLevel", batteryLevel);
+                payload.put("metrics", metrics);
+
+                saveDataLocally(payload.toString());
+            } catch (JSONException ex) {
+                Log.e(TAG, "Error saving data locally after failed send", ex);
+            }
         }
     }
-    */
-
 
     private void saveDataLocally(String data) {
         try {
@@ -355,6 +413,95 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         stopDataCollection();
+
+        // Disconnect from AWS IoT
+        if (mqttManager != null && isIotConnected) {
+            try {
+                mqttManager.disconnect();
+            } catch (Exception e) {
+                Log.e(TAG, "Error disconnecting from AWS IoT", e);
+            }
+        }
+
         logToFile("Application destroyed");
     }
+
+    /**
+     * Load certificates from assets and create the keystore.
+     * Call this before connecting to IoT.
+     */
+    /**
+     * Load certificates from assets and create the keystore.
+     * Call this before connecting to IoT.
+     */
+    private void loadCertificates() {
+        try {
+            // Check if keystore already exists
+            String keystorePath = getFilesDir().getPath();
+            if (AWSIotKeystoreHelper.isKeystorePresent(keystorePath, KEYSTORE_NAME)) {
+                // Keystore is already present
+                logToFile("Keystore already exists - loading...");
+                clientKeyStore = AWSIotKeystoreHelper.getIotKeystore(CERTIFICATE_ID,
+                        keystorePath, KEYSTORE_NAME, KEYSTORE_PASSWORD);
+                return;
+            }
+
+            // Create directory for certificates if it doesn't exist
+            File internalDir = new File(getFilesDir(), "certificates");
+            if (!internalDir.exists()) {
+                internalDir.mkdirs();
+            }
+
+            // Copy certificates from assets to internal storage
+            copyAssetToInternal("AmazonRootCA1.pem", internalDir);
+
+            // Updated certificate filenames
+            String privateKeyFilename = "private.pem.key";
+            String certificateFilename = "certificate.pem.crt";  // Changed from public.pem.key to certificate.pem.crt
+
+            copyAssetToInternal(privateKeyFilename, internalDir);
+            copyAssetToInternal(certificateFilename, internalDir);
+
+            // Use the correct file paths with the exact filenames
+            String certificateFile = new File(internalDir, certificateFilename).getAbsolutePath();
+            String privateKeyFile = new File(internalDir, privateKeyFilename).getAbsolutePath();
+
+            // Create keystore using the proper method
+            AWSIotKeystoreHelper.saveCertificateAndPrivateKey(
+                    CERTIFICATE_ID,
+                    certificateFile,
+                    privateKeyFile,
+                    keystorePath,
+                    KEYSTORE_NAME,
+                    KEYSTORE_PASSWORD
+            );
+
+            clientKeyStore = AWSIotKeystoreHelper.getIotKeystore(CERTIFICATE_ID,
+                    keystorePath, KEYSTORE_NAME, KEYSTORE_PASSWORD);
+
+            logToFile("Successfully created keystore with certificates");
+        } catch (Exception e) {
+            Log.e(TAG, "Error loading certificates", e);
+            logToFile("Error loading certificates: " + e.getMessage());
+            statusText.setText("Certificate Error: " + e.getMessage());
+        }
+
+
+    }
+
+    /**
+     * Copy a file from assets to internal storage
+     */
+    private void copyAssetToInternal(String assetFileName, File destDir) throws IOException {
+        try (InputStream in = getAssets().open(assetFileName);
+             FileOutputStream out = new FileOutputStream(new File(destDir, assetFileName))) {
+
+            byte[] buffer = new byte[1024];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+        }
+    }
+
 }

@@ -44,4 +44,8 @@ dependencies {
     implementation 'com.amazonaws:aws-android-sdk-cognito:2.72.0'
     implementation 'com.amazonaws:aws-android-sdk-cognitoidentityprovider:2.72.0'
      */
+    // AWS IoT SDK
+    implementation 'com.amazonaws:aws-android-sdk-iot:2.49.0'
+    implementation 'com.amazonaws:aws-android-sdk-auth-core:2.49.0'
+    implementation 'com.amazonaws:aws-android-sdk-mobile-client:2.49.0'
 }
